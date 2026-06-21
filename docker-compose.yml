@@ -1,0 +1,27 @@
+services:
+  leitner:
+    build: .
+    image: leitner-box:latest
+    container_name: leitner-box
+    restart: unless-stopped
+    environment:
+      VIRTUAL_HOST: leitner.gcourtot.fr
+      VIRTUAL_PORT: 8000
+      LETSENCRYPT_HOST: leitner.gcourtot.fr
+      LEITNER_VAPID_PUBLIC_KEY: ${LEITNER_VAPID_PUBLIC_KEY}
+      LEITNER_VAPID_PRIVATE_KEY: ${LEITNER_VAPID_PRIVATE_KEY}
+      LEITNER_VAPID_SUBJECT: mailto:admin@gcourtot.fr
+      LEITNER_EDIT_DIR: /edit
+    volumes:
+      - leitner_data:/data
+      - leitner_edit:/edit
+    networks:
+      - nginx-proxy
+
+networks:
+  nginx-proxy:
+    external: true
+
+volumes:
+  leitner_data:
+  leitner_edit:
