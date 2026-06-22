@@ -11,7 +11,7 @@ Personal spaced-repetition flashcard app (Leitner system), self-hosted as a sing
 
 ## Deployment
 
-The app is designed to run behind an existing `nginx-proxy` + Let's Encrypt setup, on the external Docker network `nginx-proxy`.
+The app is designed to run behind an existing `nginx-proxy` + Let's Encrypt setup, on the external Docker network `nginx-proxy`. CI (`.github/workflows/ci.yml`) builds the image and pushes it to Docker Hub on every push to `main`, then triggers a `watchtower` redeploy via the existing n8n webhook. On the server, only `docker-compose.yml` and `.env` need to be managed — there is no local build step.
 
 1. Generate VAPID keys for Web Push:
 
@@ -30,7 +30,7 @@ The app is designed to run behind an existing `nginx-proxy` + Let's Encrypt setu
    \""
    ```
 
-2. Copy `.env.example` to `.env`, fill in the two VAPID keys from step 1, then encrypt it with `age` before committing anywhere:
+2. Copy `.env.example` to `.env`, fill in `DOCKERHUB_USERNAME` (the account CI publishes the image to) and the two VAPID keys from step 1, then encrypt it with `age` before committing anywhere:
 
    ```bash
    cp .env.example .env
@@ -38,13 +38,21 @@ The app is designed to run behind an existing `nginx-proxy` + Let's Encrypt setu
    age -p -e .env > .env.age
    ```
 
-3. Build and start:
+3. Pull and start:
 
    ```bash
-   docker compose up -d --build
+   docker compose pull
+   docker compose up -d
    ```
 
+   From then on, pushes to `main` publish a new image and `watchtower` redeploys it automatically; the server only ever needs `docker-compose.yml` + `.env`.
+
 The container exposes port 8000 internally; `nginx-proxy` routes `leitner.gcourtot.fr` to it via `VIRTUAL_HOST`/`LETSENCRYPT_HOST`.
+
+### Required GitHub Actions secrets
+
+- `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` — push access to the `leitner-box` image
+- `N8N_WEBHOOK_ID_LEITNER` — webhook id that triggers the watchtower redeploy for this service
 
 ## Data layout
 

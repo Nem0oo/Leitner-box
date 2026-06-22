@@ -1,7 +1,6 @@
 services:
   leitner:
-    build: .
-    image: leitner-box:latest
+    image: ${DOCKERHUB_USERNAME}/leitner-box:latest
     container_name: leitner-box
     restart: unless-stopped
     environment:

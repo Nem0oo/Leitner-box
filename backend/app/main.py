@@ -14,6 +14,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
+VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
 
 
 @asynccontextmanager
@@ -60,6 +61,12 @@ app.include_router(indexer.router)
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/version")
+def version():
+    sha = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else "unknown"
+    return {"sha": sha}
 
 
 if FRONTEND_DIST.exists():
