@@ -74,6 +74,13 @@ def delete_deck(deck_id: int, db: Session = Depends(get_db)):
     deck = db.get(models.Deck, deck_id)
     if deck is None or deck.deleted:
         raise HTTPException(404, "deck not found")
+    now = time.time()
     deck.deleted = True
-    deck.last_modified = time.time()
+    deck.last_modified = now
+    cards = db.execute(
+        select(models.Card).where(models.Card.deck_id == deck_id, models.Card.deleted.is_(False))
+    ).scalars().all()
+    for card in cards:
+        card.deleted = True
+        card.last_modified = now
     db.commit()

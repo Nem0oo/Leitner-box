@@ -42,6 +42,19 @@ def test_delete_card_is_tombstoned_not_listed(client):
     assert r.json() == []
 
 
+def test_delete_deck_cascades_to_its_cards(client):
+    deck = _create_deck(client)
+    card = _create_card(client, deck["id"])
+    r = client.delete(f"/api/decks/{deck['id']}")
+    assert r.status_code == 204
+    r = client.get("/api/decks")
+    assert r.json() == []
+    r = client.get("/api/cards", params={"deck_id": deck["id"]})
+    assert r.json() == []
+    r = client.get(f"/api/cards/{card['id']}")
+    assert r.status_code == 404
+
+
 def test_filter_cards_by_box(client):
     deck = _create_deck(client)
     card1 = _create_card(client, deck["id"])

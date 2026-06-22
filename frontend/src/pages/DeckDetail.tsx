@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Layout } from "../components/Layout";
+import { api } from "../lib/api";
 import { db, type LocalCard, type LocalDeck } from "../lib/db";
 import { useDirection } from "../lib/direction";
 import { MAX_BOX, MIN_BOX } from "../lib/leitner";
@@ -27,6 +28,16 @@ export default function DeckDetail() {
 
   const filtered = box === null ? cards : cards.filter((c) => c[direction].box === box);
 
+  async function removeDeck() {
+    if (!deck || !confirm(`Supprimer le deck "${deck.name}" et toutes ses cartes ?`)) return;
+    await api.deleteDeck(id);
+    await db.transaction("rw", db.decks, db.cards, async () => {
+      await db.decks.delete(id);
+      await db.cards.where("deck_id").equals(id).delete();
+    });
+    navigate("/decks");
+  }
+
   return (
     <Layout title={deck?.name ?? "Deck"}>
       <div className="card-panel">
@@ -36,6 +47,9 @@ export default function DeckDetail() {
           </button>
           <button className="btn" onClick={() => navigate(`/review/${id}`)}>
             Réviser ce deck
+          </button>
+          <button className="btn fail" onClick={removeDeck}>
+            Supprimer le deck
           </button>
         </div>
       </div>
