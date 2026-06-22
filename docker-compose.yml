@@ -11,6 +11,7 @@ services:
       LEITNER_VAPID_PRIVATE_KEY: ${LEITNER_VAPID_PRIVATE_KEY}
       LEITNER_VAPID_SUBJECT: mailto:admin@gcourtot.fr
       LEITNER_EDIT_DIR: /edit
+      LEITNER_AUTH_PASSWORD: ${LEITNER_AUTH_PASSWORD}
     volumes:
       - leitner_data:/data
       - leitner_edit:/edit

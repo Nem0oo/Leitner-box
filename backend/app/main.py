@@ -2,12 +2,15 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app import auth
 from app.config import settings
 from app.database import init_db
 from app.indexer import scan_edit_dir
+from app.routers import auth as auth_router
 from app.routers import cards, decks, indexer, media, push, reviews, settings as settings_router, sync
 
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +51,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Leitner Box", lifespan=lifespan)
 
+
+@app.middleware("http")
+async def require_auth(request: Request, call_next):
+    path = request.url.path
+    if settings.auth_enabled and path.startswith("/api/") and path not in auth.PUBLIC_API_PATHS:
+        token = request.cookies.get(auth.SESSION_COOKIE)
+        if not auth.verify_session_token(token):
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+    return await call_next(request)
+
+
+app.include_router(auth_router.router)
 app.include_router(decks.router)
 app.include_router(cards.router)
 app.include_router(reviews.router)

@@ -17,6 +17,12 @@ class Settings(BaseSettings):
 
     reminder_check_interval_minutes: int = 5
 
+    auth_password: str = ""
+
+    @property
+    def auth_enabled(self) -> bool:
+        return bool(self.auth_password)
+
     @property
     def resolved_db_path(self) -> Path:
         return self.db_path or self.data_dir / "leitner.db"

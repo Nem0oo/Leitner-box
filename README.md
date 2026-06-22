@@ -30,7 +30,7 @@ The app is designed to run behind an existing `nginx-proxy` + Let's Encrypt setu
    \""
    ```
 
-2. Copy `.env.example` to `.env`, fill in `DOCKERHUB_USERNAME` (the account CI publishes the image to) and the two VAPID keys from step 1, then encrypt it with `age` before committing anywhere:
+2. Copy `.env.example` to `.env`, fill in `DOCKERHUB_USERNAME` (the account CI publishes the image to), the two VAPID keys from step 1, and a `LEITNER_AUTH_PASSWORD` (single shared password protecting the whole app — leave empty only for local testing, since an empty value disables auth entirely), then encrypt it with `age` before committing anywhere:
 
    ```bash
    cp .env.example .env
@@ -48,6 +48,10 @@ The app is designed to run behind an existing `nginx-proxy` + Let's Encrypt setu
    From then on, pushes to `main` publish a new image and `watchtower` redeploys it automatically; the server only ever needs `docker-compose.yml` + `.env`.
 
 The container exposes port 8000 internally; `nginx-proxy` routes `leitner.gcourtot.fr` to it via `VIRTUAL_HOST`/`LETSENCRYPT_HOST`.
+
+## Authentication
+
+The whole app (every `/api/*` route except `/api/health`, `/api/version` and the login endpoints) is gated behind a single shared password set via `LEITNER_AUTH_PASSWORD`. Logging in from the frontend sets an HttpOnly, signed session cookie valid 90 days — there's no user table, since this is a single-user app. Leaving the variable unset disables auth (useful for local dev only).
 
 ### Required GitHub Actions secrets
 

@@ -1,11 +1,18 @@
 import type { Direction } from "./leitner";
 
+export const UNAUTHORIZED_EVENT = "leitner:unauthorized";
+
+function notifyIfUnauthorized(status: number, path: string) {
+  if (status === 401 && path !== "/api/auth/login") window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
     ...init,
   });
   if (!res.ok) {
+    notifyIfUnauthorized(res.status, path);
     const text = await res.text().catch(() => "");
     throw new Error(`${init?.method ?? "GET"} ${path} failed: ${res.status} ${text}`);
   }
@@ -124,7 +131,10 @@ export const api = {
     const form = new FormData();
     form.append("file", file, filename);
     const res = await fetch("/api/media/upload", { method: "POST", body: form });
-    if (!res.ok) throw new Error(`upload failed: ${res.status}`);
+    if (!res.ok) {
+      notifyIfUnauthorized(res.status, "/api/media/upload");
+      throw new Error(`upload failed: ${res.status}`);
+    }
     return res.json();
   },
   mediaUrl: (hash: string) => `/api/media/${hash}`,
@@ -145,4 +155,9 @@ export const api = {
     }),
 
   rescan: () => request<Record<string, unknown>>("/api/indexer/rescan", { method: "POST" }),
+
+  authStatus: () => request<{ auth_enabled: boolean; authenticated: boolean }>("/api/auth/status"),
+  login: (password: string) =>
+    request<{ ok: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ password }) }),
+  logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
 };

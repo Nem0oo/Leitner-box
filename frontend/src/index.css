@@ -285,6 +285,11 @@ textarea {
   color: var(--text-dim);
 }
 
+.error {
+  color: #e5484d;
+  font-size: 0.9rem;
+}
+
 .media-list {
   display: flex;
   flex-wrap: wrap;

@@ -10,13 +10,20 @@ export default function Settings() {
   const [muted, setMutedState] = useState(isMuted());
   const [notifStatus, setNotifStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [authEnabled, setAuthEnabled] = useState(false);
 
   useEffect(() => {
     api.getSettings().then((s) => {
       setReminderTime(s.reminder_time ?? "20:00");
       setReminderEnabled(s.reminder_enabled);
     });
+    api.authStatus().then((s) => setAuthEnabled(s.auth_enabled));
   }, []);
+
+  async function handleLogout() {
+    await api.logout();
+    window.location.reload();
+  }
 
   async function save() {
     setSaving(true);
@@ -105,6 +112,17 @@ export default function Settings() {
           </button>
         </div>
       </div>
+
+      {authEnabled && (
+        <div className="card-panel">
+          <div className="row">
+            <span className="muted">Session</span>
+            <button className="btn secondary" onClick={handleLogout}>
+              Se déconnecter
+            </button>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
