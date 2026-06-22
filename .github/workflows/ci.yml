@@ -90,10 +90,10 @@ jobs:
     steps:
       - name: Trigger deploy via n8n
         run: |
-          response=$(curl -sf -X POST -H "Content-Type: application/json" "https://n8n.gcourtot.fr/webhook/${{ secrets.N8N_WEBHOOK_ID_LEITNER }}")
+          response=$(curl -H "Content-Type: application/json" "https://n8n.gcourtot.fr/webhook/${{ secrets.N8N_WEBHOOK_ID }}")
           echo "$response"
           if echo "$response" | grep -qi "<!DOCTYPE html"; then
-            echo "::error::n8n returned its editor UI instead of running the webhook - check that N8N_WEBHOOK_ID_LEITNER is correct and the workflow is Active"
+            echo "::error::n8n returned its editor UI instead of running the webhook - check that N8N_WEBHOOK_ID is correct and the workflow is Active"
             exit 1
           fi
 
@@ -132,9 +132,9 @@ jobs:
 
       - name: Trigger deploy via n8n
         run: |
-          response=$(curl -sf -X POST -H "Content-Type: application/json" "https://n8n.gcourtot.fr/webhook/${{ secrets.N8N_WEBHOOK_ID_LEITNER }}")
+          response=$(curl -H "Content-Type: application/json" "https://n8n.gcourtot.fr/webhook/${{ secrets.N8N_WEBHOOK_ID }}")
           echo "$response"
           if echo "$response" | grep -qi "<!DOCTYPE html"; then
-            echo "::error::n8n returned its editor UI instead of running the webhook - check that N8N_WEBHOOK_ID_LEITNER is correct and the workflow is Active"
+            echo "::error::n8n returned its editor UI instead of running the webhook - check that N8N_WEBHOOK_ID is correct and the workflow is Active"
             exit 1
           fi

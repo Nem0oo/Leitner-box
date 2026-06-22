@@ -56,7 +56,7 @@ The whole app (every `/api/*` route except `/api/health`, `/api/version` and the
 ### Required GitHub Actions secrets
 
 - `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` — push access to the `leitner-box` image
-- `N8N_WEBHOOK_ID_LEITNER` — webhook id that triggers the watchtower redeploy for this service
+- `N8N_WEBHOOK_ID` — webhook id that triggers the watchtower redeploy for this service
 
 ## Data layout
 
