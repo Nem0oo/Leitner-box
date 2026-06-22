@@ -13,6 +13,14 @@ Files are grouped by prefix (everything before the first dot): all
 extension is treated as a media attachment and content-addressed into the
 blob store. Re-hashing is skipped when a file's mtime+size hasn't changed
 since the last scan.
+
+For text-only cards, building a `carte_XXXX/` folder by hand for every
+card is slow. As a shortcut, a flat `<edit_dir>/<deck name>/cartes.txt`
+file with one `recto;verso` pair per line is also supported: each scan
+turns every line into its own `carte_XXXX/recto.txt` + `verso.txt` and
+removes it from `cartes.txt`, so the file acts as an intake queue. The
+separator is the first `;` on the line, so `verso` may itself contain
+`;` but `recto` may not.
 """
 
 from __future__ import annotations
@@ -24,6 +32,8 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app import models, storage
+
+FLAT_FILE_NAME = "cartes.txt"
 
 
 @dataclass
@@ -104,6 +114,45 @@ def _card_changed(card: models.Card, fields: dict) -> bool:
     )
 
 
+def _next_card_index(deck_folder: Path) -> int:
+    max_index = 0
+    for p in deck_folder.iterdir():
+        if p.is_dir() and p.name.startswith("carte_"):
+            suffix = p.name[len("carte_") :]
+            if suffix.isdigit():
+                max_index = max(max_index, int(suffix))
+    return max_index + 1
+
+
+def _materialize_flat_file(deck_folder: Path, result: IndexResult) -> None:
+    flat_path = deck_folder / FLAT_FILE_NAME
+    if not flat_path.exists():
+        return
+
+    lines = flat_path.read_text(encoding="utf-8").splitlines()
+    remaining: list[str] = []
+    next_index = _next_card_index(deck_folder)
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        if ";" not in line:
+            result.errors.append(f"{flat_path}: ligne ignorée (pas de ';'): {line!r}")
+            remaining.append(raw_line)
+            continue
+
+        recto, _, verso = line.partition(";")
+        recto, verso = recto.strip(), verso.strip()
+        card_folder = deck_folder / f"carte_{next_index:04d}"
+        card_folder.mkdir(parents=True)
+        (card_folder / "recto.txt").write_text(recto, encoding="utf-8")
+        (card_folder / "verso.txt").write_text(verso, encoding="utf-8")
+        next_index += 1
+
+    flat_path.write_text("\n".join(remaining) + ("\n" if remaining else ""), encoding="utf-8")
+
+
 def scan_edit_dir(db: Session, edit_dir: Path, blob_dir: Path) -> IndexResult:
     result = IndexResult()
     if not edit_dir.exists():
@@ -114,6 +163,11 @@ def scan_edit_dir(db: Session, edit_dir: Path, blob_dir: Path) -> IndexResult:
         deck = get_or_create_deck(db, deck_folder.name)
         if existing_deck is None:
             result.decks_created += 1
+
+        try:
+            _materialize_flat_file(deck_folder, result)
+        except Exception as exc:  # noqa: BLE001 - report and keep scanning
+            result.errors.append(f"{deck_folder / FLAT_FILE_NAME}: {exc}")
 
         for card_folder in sorted(p for p in deck_folder.iterdir() if p.is_dir() and p.name.startswith("carte_")):
             try:

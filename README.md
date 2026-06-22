@@ -62,6 +62,7 @@ The whole app (every `/api/*` route except `/api/health`, `/api/version` and the
 
 - `leitner_data` volume (`/data`): SQLite DB + content-addressed media blobs
 - `leitner_edit` volume (`/edit`): manual editing folder, scanned by the indexer on startup and via `POST /api/indexer/rescan`. Cards live under `<edit>/<deck_name>/carte_XXXX/` with `recto.*`/`verso.*` files.
+  For text-only cards, drop a `<edit>/<deck_name>/cartes.txt` file instead, one `recto;verso` pair per line (the separator is the first `;`, so `verso` may contain `;` but `recto` may not). Each scan turns every line into its own `carte_XXXX/recto.txt` + `verso.txt` and removes it from `cartes.txt`.
 
 ## Development
 

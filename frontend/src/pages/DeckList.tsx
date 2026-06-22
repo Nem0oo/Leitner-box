@@ -121,7 +121,9 @@ export default function DeckList() {
       <div className="card-panel">
         <p className="muted">
           Import en masse : déposez des dossiers <code>carte_XXXX/</code> dans le dossier d'édition du serveur, puis
-          scannez.
+          scannez. Pour des cartes texte uniquement, déposez plutôt un fichier{" "}
+          <code>{"<nom_du_deck>/cartes.txt"}</code> avec une ligne <code>recto;verso</code> par carte : chaque ligne
+          sera transformée en dossier <code>carte_XXXX/</code> puis retirée du fichier.
         </p>
         <button className="btn secondary block" onClick={rescan}>
           Scanner le dossier d'édition

@@ -144,3 +144,66 @@ def test_scan_missing_edit_dir_is_noop(db, tmp_path):
     result = scan_edit_dir(db, tmp_path / "does-not-exist", tmp_path / "blobs")
     assert result.cards_created == 0
     assert result.errors == []
+
+
+def test_scan_materializes_flat_file_into_card_folders(db, tmp_path):
+    edit_dir = tmp_path / "edit"
+    blob_dir = tmp_path / "blobs"
+    deck_dir = edit_dir / "Espagnol"
+    deck_dir.mkdir(parents=True)
+    (deck_dir / "cartes.txt").write_text("hola;hello\nadios;goodbye\n", encoding="utf-8")
+
+    result = scan_edit_dir(db, edit_dir, blob_dir)
+
+    assert result.cards_created == 2
+    assert result.errors == []
+    deck = db.query(models.Deck).filter_by(name="Espagnol").one()
+    cards = sorted(
+        db.query(models.Card).filter_by(deck_id=deck.id).all(),
+        key=lambda c: c.source_folder,
+    )
+    assert [c.recto_text for c in cards] == ["hola", "adios"]
+    assert [c.verso_text for c in cards] == ["hello", "goodbye"]
+    assert (deck_dir / "carte_0001" / "recto.txt").read_text(encoding="utf-8") == "hola"
+    assert (deck_dir / "carte_0001" / "verso.txt").read_text(encoding="utf-8") == "hello"
+    # the flat file is drained once its lines are materialized
+    assert (deck_dir / "cartes.txt").read_text(encoding="utf-8") == ""
+
+
+def test_scan_flat_file_continues_numbering_after_existing_folders(db, tmp_path):
+    edit_dir = tmp_path / "edit"
+    blob_dir = tmp_path / "blobs"
+    _make_card_folder(edit_dir, "Espagnol", "carte_0001", recto_text="existing", verso_text="card")
+    (edit_dir / "Espagnol" / "cartes.txt").write_text("hola;hello\n", encoding="utf-8")
+
+    scan_edit_dir(db, edit_dir, blob_dir)
+
+    assert (edit_dir / "Espagnol" / "carte_0002" / "recto.txt").exists()
+
+
+def test_scan_flat_file_keeps_unparseable_lines(db, tmp_path):
+    edit_dir = tmp_path / "edit"
+    blob_dir = tmp_path / "blobs"
+    deck_dir = edit_dir / "Espagnol"
+    deck_dir.mkdir(parents=True)
+    (deck_dir / "cartes.txt").write_text("hola;hello\nno-separator-here\n", encoding="utf-8")
+
+    result = scan_edit_dir(db, edit_dir, blob_dir)
+
+    assert result.cards_created == 1
+    assert len(result.errors) == 1
+    assert (deck_dir / "cartes.txt").read_text(encoding="utf-8").strip() == "no-separator-here"
+
+
+def test_scan_flat_file_verso_may_contain_separator(db, tmp_path):
+    edit_dir = tmp_path / "edit"
+    blob_dir = tmp_path / "blobs"
+    deck_dir = edit_dir / "Espagnol"
+    deck_dir.mkdir(parents=True)
+    (deck_dir / "cartes.txt").write_text("hola;hello; how are you\n", encoding="utf-8")
+
+    scan_edit_dir(db, edit_dir, blob_dir)
+
+    card = db.query(models.Card).one()
+    assert card.recto_text == "hola"
+    assert card.verso_text == "hello; how are you"
