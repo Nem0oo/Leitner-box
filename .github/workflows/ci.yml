@@ -90,7 +90,12 @@ jobs:
     steps:
       - name: Trigger deploy via n8n
         run: |
-          curl -H "Content-Type: application/json" "https://n8n.gcourtot.fr/webhook/${{ secrets.N8N_WEBHOOK_ID_LEITNER }}"
+          response=$(curl -sf -X POST -H "Content-Type: application/json" "https://n8n.gcourtot.fr/webhook/${{ secrets.N8N_WEBHOOK_ID_LEITNER }}")
+          echo "$response"
+          if echo "$response" | grep -qi "<!DOCTYPE html"; then
+            echo "::error::n8n returned its editor UI instead of running the webhook - check that N8N_WEBHOOK_ID_LEITNER is correct and the workflow is Active"
+            exit 1
+          fi
 
   test_prod:
     if: github.event_name == 'push'
@@ -127,4 +132,9 @@ jobs:
 
       - name: Trigger deploy via n8n
         run: |
-          curl -H "Content-Type: application/json" "https://n8n.gcourtot.fr/webhook/${{ secrets.N8N_WEBHOOK_ID_LEITNER }}"
+          response=$(curl -sf -X POST -H "Content-Type: application/json" "https://n8n.gcourtot.fr/webhook/${{ secrets.N8N_WEBHOOK_ID_LEITNER }}")
+          echo "$response"
+          if echo "$response" | grep -qi "<!DOCTYPE html"; then
+            echo "::error::n8n returned its editor UI instead of running the webhook - check that N8N_WEBHOOK_ID_LEITNER is correct and the workflow is Active"
+            exit 1
+          fi
