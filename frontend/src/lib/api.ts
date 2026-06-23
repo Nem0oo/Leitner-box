@@ -2,6 +2,14 @@ import type { Direction } from "./leitner";
 
 export const UNAUTHORIZED_EVENT = "leitner:unauthorized";
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 function notifyIfUnauthorized(status: number, path: string) {
   if (status === 401 && path !== "/api/auth/login") window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
 }
@@ -14,7 +22,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     notifyIfUnauthorized(res.status, path);
     const text = await res.text().catch(() => "");
-    throw new Error(`${init?.method ?? "GET"} ${path} failed: ${res.status} ${text}`);
+    throw new ApiError(res.status, `${init?.method ?? "GET"} ${path} failed: ${res.status} ${text}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
