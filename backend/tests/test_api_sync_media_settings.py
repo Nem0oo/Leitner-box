@@ -19,6 +19,19 @@ def test_sync_pull_returns_everything_when_since_none(client):
     assert "server_time" in body
 
 
+def test_sync_pull_reports_deleted_deck_as_tombstone(client):
+    deck = _create_deck(client)
+    r1 = client.get("/api/sync/pull")
+    checkpoint = r1.json()["server_time"]
+
+    client.delete(f"/api/decks/{deck['id']}")
+    r2 = client.get("/api/sync/pull", params={"since": checkpoint})
+    body = r2.json()
+    assert len(body["decks"]) == 1
+    assert body["decks"][0]["id"] == deck["id"]
+    assert body["decks"][0]["deleted"] is True
+
+
 def test_sync_pull_filters_by_since(client):
     deck = _create_deck(client)
     r1 = client.get("/api/sync/pull")

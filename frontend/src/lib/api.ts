@@ -27,6 +27,7 @@ export interface DeckDTO {
   last_modified: number;
   card_count: number;
   due_count: number;
+  deleted: boolean;
 }
 
 export interface DirectionStateDTO {

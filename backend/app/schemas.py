@@ -24,6 +24,7 @@ class DeckOut(BaseModel):
     last_modified: float
     card_count: int = 0
     due_count: int = 0
+    deleted: bool = False
 
 
 # ---- Cards ----

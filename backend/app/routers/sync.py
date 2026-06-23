@@ -21,6 +21,8 @@ def pull(since: float | None = None, db: Session = Depends(get_db)):
     if since is not None:
         deck_query = deck_query.where(models.Deck.last_modified > since)
     decks = db.execute(deck_query).scalars().all()
+    # tombstones (deleted=True) are intentionally included so clients can
+    # remove decks they previously cached, rather than resurrecting them
 
     card_query = select(models.Card)
     if since is not None:
@@ -35,7 +37,7 @@ def pull(since: float | None = None, db: Session = Depends(get_db)):
         ).all()]
         deck_out.append(schemas.DeckOut(
             id=d.id, name=d.name, description=d.description, last_modified=d.last_modified,
-            card_count=len(card_ids), due_count=0,
+            card_count=len(card_ids), due_count=0, deleted=d.deleted,
         ))
 
     return schemas.SyncPullResponse(

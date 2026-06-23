@@ -18,14 +18,18 @@ export async function pullChanges(): Promise<{ decks: number; cards: number }> {
 
   await db.transaction("rw", db.decks, db.cards, async () => {
     for (const deck of result.decks) {
-      await db.decks.put({
-        id: deck.id,
-        name: deck.name,
-        description: deck.description,
-        last_modified: deck.last_modified,
-        deleted: false,
-        offline_enabled: (await db.decks.get(deck.id))?.offline_enabled ?? false,
-      });
+      if (deck.deleted) {
+        await db.decks.delete(deck.id);
+      } else {
+        await db.decks.put({
+          id: deck.id,
+          name: deck.name,
+          description: deck.description,
+          last_modified: deck.last_modified,
+          deleted: false,
+          offline_enabled: (await db.decks.get(deck.id))?.offline_enabled ?? false,
+        });
+      }
     }
     for (const card of result.cards) {
       if (card.deleted) {
