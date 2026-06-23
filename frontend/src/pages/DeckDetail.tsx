@@ -30,12 +30,16 @@ export default function DeckDetail() {
 
   async function removeDeck() {
     if (!deck || !confirm(`Supprimer le deck "${deck.name}" et toutes ses cartes ?`)) return;
-    await api.deleteDeck(id);
-    await db.transaction("rw", db.decks, db.cards, async () => {
-      await db.decks.delete(id);
-      await db.cards.where("deck_id").equals(id).delete();
-    });
-    navigate("/decks");
+    try {
+      await api.deleteDeck(id);
+      await db.transaction("rw", db.decks, db.cards, async () => {
+        await db.decks.delete(id);
+        await db.cards.where("deck_id").equals(id).delete();
+      });
+      navigate("/decks");
+    } catch {
+      alert("Suppression impossible (hors ligne ?)");
+    }
   }
 
   return (

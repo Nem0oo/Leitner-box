@@ -84,7 +84,7 @@ export async function ensureSeeded(): Promise<void> {
     const result = await api.syncPull();
     await db.transaction("rw", db.decks, db.cards, async () => {
       for (const deck of result.decks) {
-        await db.decks.put({ ...deck, deleted: false, offline_enabled: false });
+        if (!deck.deleted) await db.decks.put({ ...deck, deleted: false, offline_enabled: false });
       }
       for (const card of result.cards) {
         if (!card.deleted) await db.cards.put(card);
