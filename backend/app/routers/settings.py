@@ -13,6 +13,7 @@ def get_settings(db: Session = Depends(get_db)):
     return schemas.SettingsOut(
         reminder_time=settings_store.get_setting(db, "reminder_time") or None,
         reminder_enabled=settings_store.get_bool(db, "reminder_enabled"),
+        reminder_timezone=settings_store.get_setting(db, "reminder_timezone") or "UTC",
         direction=settings_store.get_setting(db, "direction"),
         vapid_public_key=settings.vapid_public_key,
     )
@@ -24,6 +25,8 @@ def update_settings(payload: schemas.SettingsUpdate, db: Session = Depends(get_d
         settings_store.set_setting(db, "reminder_time", payload.reminder_time)
     if payload.reminder_enabled is not None:
         settings_store.set_setting(db, "reminder_enabled", "true" if payload.reminder_enabled else "false")
+    if payload.reminder_timezone is not None:
+        settings_store.set_setting(db, "reminder_timezone", payload.reminder_timezone)
     if payload.direction is not None:
         settings_store.set_setting(db, "direction", payload.direction)
     db.commit()

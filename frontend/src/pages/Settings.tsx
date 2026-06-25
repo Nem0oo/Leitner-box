@@ -28,7 +28,8 @@ export default function Settings() {
   async function save() {
     setSaving(true);
     try {
-      await api.updateSettings({ reminder_time: reminderTime, reminder_enabled: reminderEnabled });
+      const reminder_timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      await api.updateSettings({ reminder_time: reminderTime, reminder_enabled: reminderEnabled, reminder_timezone });
     } catch {
       alert("Enregistrement impossible (hors ligne ?)");
     } finally {

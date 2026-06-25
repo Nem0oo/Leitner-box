@@ -81,6 +81,7 @@ export interface ReviewEventInput {
 export interface SettingsDTO {
   reminder_time: string | null;
   reminder_enabled: boolean;
+  reminder_timezone: string;
   direction: Direction;
   vapid_public_key: string;
 }
@@ -149,7 +150,7 @@ export const api = {
   mediaUrl: (hash: string) => `/api/media/${hash}`,
 
   getSettings: () => request<SettingsDTO>("/api/settings"),
-  updateSettings: (payload: Partial<{ reminder_time: string; reminder_enabled: boolean; direction: Direction }>) =>
+  updateSettings: (payload: Partial<{ reminder_time: string; reminder_enabled: boolean; reminder_timezone: string; direction: Direction }>) =>
     request<SettingsDTO>("/api/settings", { method: "PUT", body: JSON.stringify(payload) }),
 
   pushSubscribe: (subscription: PushSubscriptionJSON) =>

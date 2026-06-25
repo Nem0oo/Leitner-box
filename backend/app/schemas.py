@@ -116,6 +116,7 @@ class SyncPullResponse(BaseModel):
 class SettingsOut(BaseModel):
     reminder_time: str | None
     reminder_enabled: bool
+    reminder_timezone: str
     direction: str
     vapid_public_key: str
 
@@ -123,6 +124,7 @@ class SettingsOut(BaseModel):
 class SettingsUpdate(BaseModel):
     reminder_time: str | None = None
     reminder_enabled: bool | None = None
+    reminder_timezone: str | None = None
     direction: str | None = None
 
 

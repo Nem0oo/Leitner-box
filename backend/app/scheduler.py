@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import select
@@ -28,7 +29,13 @@ def check_and_notify() -> None:
         if not reminder_time:
             return
 
-        now = dt.datetime.now()
+        tz_name = settings_store.get_setting(db, "reminder_timezone") or "UTC"
+        try:
+            tz = ZoneInfo(tz_name)
+        except ZoneInfoNotFoundError:
+            logger.warning("Unknown reminder_timezone %r, falling back to UTC", tz_name)
+            tz = ZoneInfo("UTC")
+        now = dt.datetime.now(tz)
         today = now.date().isoformat()
         if _last_sent_date == today:
             return
