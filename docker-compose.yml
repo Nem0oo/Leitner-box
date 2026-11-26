@@ -13,15 +13,11 @@ services:
       LEITNER_EDIT_DIR: /edit
       LEITNER_AUTH_PASSWORD: ${LEITNER_AUTH_PASSWORD}
     volumes:
-      - leitner_data:/data
-      - leitner_edit:/edit
+      - ./data:/data
+      - ./edit:/edit
     networks:
       - nginx-proxy
 
 networks:
   nginx-proxy:
     external: true
-
-volumes:
-  leitner_data:
-  leitner_edit:

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
 from app.database import get_db
-from app.leitner import DIRECTIONS
+from app.srs import DIRECTIONS
 
 router = APIRouter(prefix="/api/decks", tags=["decks"])
 

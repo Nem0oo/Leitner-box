@@ -4,7 +4,15 @@ import { Layout } from "../components/Layout";
 import { ApiError, api } from "../lib/api";
 import { db, type LocalCard, type LocalDeck } from "../lib/db";
 import { useDirection } from "../lib/direction";
-import { MAX_BOX, MIN_BOX } from "../lib/leitner";
+import { STATE_LABELS, type SrsState, formatInterval } from "../lib/srs";
+
+const FILTERS: SrsState[] = ["new", "learning", "review", "relearning"];
+
+function nextReviewLabel(dueAt: number | null): string {
+  if (dueAt === null) return "à apprendre";
+  const delta = dueAt - Date.now() / 1000;
+  return delta <= 0 ? "à réviser" : `dans ${formatInterval(delta)}`;
+}
 
 export default function DeckDetail() {
   const { deckId } = useParams();
@@ -12,7 +20,7 @@ export default function DeckDetail() {
   const [direction] = useDirection();
   const [deck, setDeck] = useState<LocalDeck | null>(null);
   const [cards, setCards] = useState<LocalCard[]>([]);
-  const [box, setBox] = useState<number | null>(null);
+  const [stateFilter, setStateFilter] = useState<SrsState | null>(null);
   const navigate = useNavigate();
 
   async function load() {
@@ -26,7 +34,7 @@ export default function DeckDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const filtered = box === null ? cards : cards.filter((c) => c[direction].box === box);
+  const filtered = stateFilter === null ? cards : cards.filter((c) => c[direction].state === stateFilter);
 
   async function removeDeck() {
     if (!deck || !confirm(`Supprimer le deck "${deck.name}" et toutes ses cartes ?`)) return;
@@ -63,12 +71,12 @@ export default function DeckDetail() {
       </div>
 
       <div className="box-filter">
-        <button className={box === null ? "active" : ""} onClick={() => setBox(null)}>
+        <button className={stateFilter === null ? "active" : ""} onClick={() => setStateFilter(null)}>
           Toutes
         </button>
-        {Array.from({ length: MAX_BOX - MIN_BOX + 1 }, (_, i) => i + MIN_BOX).map((b) => (
-          <button key={b} className={box === b ? "active" : ""} onClick={() => setBox(b)}>
-            Boîte {b}
+        {FILTERS.map((s) => (
+          <button key={s} className={stateFilter === s ? "active" : ""} onClick={() => setStateFilter(s)}>
+            {STATE_LABELS[s]}
           </button>
         ))}
       </div>
@@ -79,7 +87,9 @@ export default function DeckDetail() {
         <div className="card-panel" key={card.id} onClick={() => navigate(`/cards/${card.id}/edit`)}>
           <div className="row">
             <span>{card.recto_text || "(sans texte)"}</span>
-            <span className="muted">Boîte {card[direction].box}</span>
+            <span className="muted">
+              {STATE_LABELS[card[direction].state]} · {nextReviewLabel(card[direction].due_at)}
+            </span>
           </div>
         </div>
       ))}

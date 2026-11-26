@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
 from app.database import get_db
-from app.leitner import DIRECTIONS, RESULT_FAIL, RESULT_SUCCESS, is_due
+from app.srs import DIRECTIONS, is_due, normalize_rating
 
 router = APIRouter(prefix="/api/review", tags=["review"])
 
@@ -40,7 +40,7 @@ def due_cards(deck_id: int | None = None, direction: str = "recto_to_verso", db:
             verso_text=card.verso_text,
             verso_media=card.verso_media or [],
             direction=direction,
-            box=states[(card.id, direction)].box,
+            state=crud.card_direction_state_out(states[(card.id, direction)], now),
         )
         for card, deck_name in rows
         if is_due(states[(card.id, direction)], now)
@@ -65,8 +65,10 @@ def due_count(deck_id: int | None = None, direction: str = "recto_to_verso", db:
 def _insert_event(db: Session, payload: schemas.ReviewEventCreate) -> models.ReviewEvent | None:
     if payload.direction not in DIRECTIONS:
         raise HTTPException(400, f"invalid direction: {payload.direction}")
-    if payload.result not in (RESULT_SUCCESS, RESULT_FAIL):
-        raise HTTPException(400, f"invalid result: {payload.result}")
+    try:
+        rating = normalize_rating(payload.result)
+    except ValueError:
+        raise HTTPException(400, f"invalid result: {payload.result}") from None
     card = db.get(models.Card, payload.card_id)
     if card is None:
         raise HTTPException(404, f"card not found: {payload.card_id}")
@@ -78,7 +80,7 @@ def _insert_event(db: Session, payload: schemas.ReviewEventCreate) -> models.Rev
         id=payload.id or models.new_uuid(),
         card_id=payload.card_id,
         direction=payload.direction,
-        result=payload.result,
+        result=rating,
         timestamp=payload.timestamp or time.time(),
     )
     db.add(event)
