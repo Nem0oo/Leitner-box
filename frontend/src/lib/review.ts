@@ -1,6 +1,6 @@
 import { api } from "./api";
-import { db, type DirectionState } from "./db";
-import { dueAt, isDue, nextBox, type Direction } from "./leitner";
+import { db } from "./db";
+import { type Direction, type DirectionState, type ReviewRating, isDue, nextState } from "./srs";
 import { pushPendingReviews } from "./sync";
 
 export interface DueCard {
@@ -12,7 +12,7 @@ export interface DueCard {
   verso_text: string | null;
   verso_media: string[];
   direction: Direction;
-  box: number;
+  state: DirectionState;
 }
 
 /** Cards due now, read entirely from the local Dexie cache so review works
@@ -27,7 +27,7 @@ export async function getDueCards(deckId: number | undefined, direction: Directi
   for (const card of cards) {
     if (card.deleted) continue;
     const state = card[direction];
-    if (isDue(state.box, state.last_review_at, now)) {
+    if (isDue(state, now)) {
       due.push({
         id: card.id,
         deck_id: card.deck_id,
@@ -37,7 +37,7 @@ export async function getDueCards(deckId: number | undefined, direction: Directi
         verso_text: card.verso_text,
         verso_media: card.verso_media,
         direction,
-        box: state.box,
+        state,
       });
     }
   }
@@ -53,28 +53,33 @@ export async function dueCount(deckId: number | undefined, direction: Direction)
   return (await getDueCards(deckId, direction)).length;
 }
 
-/** Apply a review result optimistically to the local cache, queue it for
- * sync, and opportunistically flush the queue if we're online. */
-export async function recordReview(cardId: number, direction: Direction, result: "success" | "fail"): Promise<void> {
+/** Apply a rating optimistically to the local cache, queue it for sync, and
+ * opportunistically flush the queue if we're online. Returns the new state
+ * (null if the card is no longer cached). */
+export async function recordReview(
+  cardId: number,
+  direction: Direction,
+  rating: ReviewRating,
+): Promise<DirectionState | null> {
   const now = Date.now() / 1000;
   const card = await db.cards.get(cardId);
-  if (!card) return;
+  if (!card) return null;
 
-  const newBox = nextBox(card[direction].box, result);
-  const newState: DirectionState = { box: newBox, last_review_at: now, due_at: dueAt(newBox, now), is_due: false };
+  const newState = nextState(card[direction], rating, now);
   await db.cards.put({ ...card, [direction]: newState });
 
   await db.reviewQueue.add({
     id: crypto.randomUUID(),
     card_id: cardId,
     direction,
-    result,
+    result: rating,
     timestamp: now,
   });
 
   if (navigator.onLine) {
     pushPendingReviews().catch(() => {});
   }
+  return newState;
 }
 
 export async function ensureSeeded(): Promise<void> {

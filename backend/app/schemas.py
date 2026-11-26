@@ -1,7 +1,5 @@
 from pydantic import BaseModel, ConfigDict
 
-from app.leitner import DIRECTIONS, RESULT_FAIL, RESULT_SUCCESS
-
 
 # ---- Decks ----
 
@@ -44,10 +42,14 @@ class CardUpdate(BaseModel):
 
 
 class CardDirectionStateOut(BaseModel):
-    box: int
+    state: str  # new | learning | review | relearning
+    step: int | None  # current learning/relearning step, None otherwise
+    stability: float | None
+    difficulty: float | None
     last_review_at: float | None
     due_at: float | None
     is_due: bool
+    review_count: int
 
 
 class CardOut(BaseModel):
@@ -100,7 +102,7 @@ class DueCardOut(BaseModel):
     verso_text: str | None
     verso_media: list[str]
     direction: str
-    box: int
+    state: CardDirectionStateOut
 
 
 # ---- Sync ----
@@ -131,13 +133,3 @@ class SettingsUpdate(BaseModel):
 class PushSubscriptionIn(BaseModel):
     endpoint: str
     keys: dict[str, str]
-
-
-def validate_direction(direction: str) -> None:
-    if direction not in DIRECTIONS:
-        raise ValueError(f"Invalid direction: {direction}")
-
-
-def validate_result(result: str) -> None:
-    if result not in (RESULT_SUCCESS, RESULT_FAIL):
-        raise ValueError(f"Invalid result: {result}")

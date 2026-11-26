@@ -1,25 +1,26 @@
 import { useEffect, useState } from "react";
 import { Layout } from "../components/Layout";
 import { db } from "../lib/db";
+import { useDirection } from "../lib/direction";
+import { STATE_LABELS, type SrsState } from "../lib/srs";
+
+const STATE_ORDER: SrsState[] = ["new", "learning", "review", "relearning"];
 
 export default function Stats() {
-  const [stats, setStats] = useState<{ total: number; success: number; fail: number; pending: number } | null>(null);
+  const [direction] = useDirection();
+  const [stats, setStats] = useState<{ total: number; byState: Record<SrsState, number>; pending: number } | null>(null);
 
   useEffect(() => {
     (async () => {
       const pending = await db.reviewQueue.count();
-      // Minimal MVP stats from locally cached state; full history lives
+      // Minimal stats from locally cached state; full history lives
       // server-side in ReviewEvents for future, richer reporting.
-      const cards = await db.cards.toArray();
-      let success = 0;
-      let fail = 0;
-      for (const card of cards) {
-        if (card.recto_to_verso.box > 1) success++;
-        if (card.recto_to_verso.box === 1 && card.recto_to_verso.last_review_at) fail++;
-      }
-      setStats({ total: cards.length, success, fail, pending });
+      const cards = (await db.cards.toArray()).filter((c) => !c.deleted);
+      const byState: Record<SrsState, number> = { new: 0, learning: 0, review: 0, relearning: 0 };
+      for (const card of cards) byState[card[direction].state]++;
+      setStats({ total: cards.length, byState, pending });
     })();
-  }, []);
+  }, [direction]);
 
   return (
     <Layout title="Stats">
@@ -32,10 +33,12 @@ export default function Stats() {
             <span className="muted">Cartes au total</span>
             <strong>{stats.total}</strong>
           </div>
-          <div className="row">
-            <span className="muted">En progression (boîte &gt; 1)</span>
-            <strong>{stats.success}</strong>
-          </div>
+          {STATE_ORDER.map((s) => (
+            <div className="row" key={s}>
+              <span className="muted">{STATE_LABELS[s]}</span>
+              <strong>{stats.byState[s]}</strong>
+            </div>
+          ))}
           <div className="row">
             <span className="muted">Révisions en attente de sync</span>
             <strong>{stats.pending}</strong>

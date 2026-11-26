@@ -1,4 +1,4 @@
-import type { Direction } from "./leitner";
+import type { Direction, DirectionState, ReviewRating } from "./srs";
 
 export const UNAUTHORIZED_EVENT = "leitner:unauthorized";
 
@@ -38,12 +38,7 @@ export interface DeckDTO {
   deleted: boolean;
 }
 
-export interface DirectionStateDTO {
-  box: number;
-  last_review_at: number | null;
-  due_at: number | null;
-  is_due: boolean;
-}
+export type DirectionStateDTO = DirectionState;
 
 export interface CardDTO {
   id: number;
@@ -67,14 +62,14 @@ export interface DueCardDTO {
   verso_text: string | null;
   verso_media: string[];
   direction: Direction;
-  box: number;
+  state: DirectionStateDTO;
 }
 
 export interface ReviewEventInput {
   id: string;
   card_id: number;
   direction: Direction;
-  result: "success" | "fail";
+  result: ReviewRating | "success" | "fail";
   timestamp: number;
 }
 
@@ -101,11 +96,11 @@ export const api = {
     request<DeckDTO>(`/api/decks/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteDeck: (id: number) => request<void>(`/api/decks/${id}`, { method: "DELETE" }),
 
-  listCards: (params: { deck_id?: number; direction: Direction; box?: number }) => {
+  listCards: (params: { deck_id?: number; direction: Direction; state?: DirectionState["state"] }) => {
     const qs = new URLSearchParams();
     if (params.deck_id !== undefined) qs.set("deck_id", String(params.deck_id));
     qs.set("direction", params.direction);
-    if (params.box !== undefined) qs.set("box", String(params.box));
+    if (params.state !== undefined) qs.set("state", params.state);
     return request<CardDTO[]>(`/api/cards?${qs.toString()}`);
   },
   getCard: (id: number) => request<CardDTO>(`/api/cards/${id}`),

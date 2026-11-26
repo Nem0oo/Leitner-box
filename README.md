@@ -1,6 +1,6 @@
 # Leitner Box
 
-Personal spaced-repetition flashcard app (Leitner system), self-hosted as a single Docker container.
+Personal spaced-repetition flashcard app, self-hosted as a single Docker container. Scheduling uses FSRS-6 (`fsrs` on the backend, `ts-fsrs` mirrored on the frontend for offline review), with four ratings (again / hard / good / easy) and short learning steps re-injected into the current session. A card's scheduling state is never stored: it is recomputed by replaying its review history.
 
 ## Stack
 
@@ -60,19 +60,24 @@ The whole app (every `/api/*` route except `/api/health`, `/api/version` and the
 
 ## Data layout
 
-- `leitner_data` volume (`/data`): SQLite DB + content-addressed media blobs
-- `leitner_edit` volume (`/edit`): manual editing folder, scanned by the indexer on startup and via `POST /api/indexer/rescan`. Cards live under `<edit>/<deck_name>/carte_XXXX/` with `recto.*`/`verso.*` files.
+Both are host folders bind-mounted next to `docker-compose.yml`:
+
+- `./data` (`/data`): SQLite DB + content-addressed media blobs
+- `./edit` (`/edit`): manual editing folder, scanned by the indexer on startup and via `POST /api/indexer/rescan`. Cards live under `<edit>/<deck_name>/carte_XXXX/` with `recto.*`/`verso.*` files.
   For text-only cards, drop a `<edit>/<deck_name>/cartes.txt` file instead, one `recto;verso` pair per line (the separator is the first `;`, so `verso` may contain `;` but `recto` may not). Each scan turns every line into its own `carte_XXXX/recto.txt` + `verso.txt` and removes it from `cartes.txt`.
 
 ## Development
 
-```bash
-# backend
-cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/pytest
+Everything runs in Docker, nothing is installed on the host. CI runs the same test suites and blocks the image push when they fail.
 
-# frontend
-cd frontend && npm install
-npm run build   # outputs into ../backend/static
-npx vitest run
+```bash
+# backend tests
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1 \
+  -v "$PWD/backend:/app" -w /app python:3.11-slim \
+  bash -c "pip install -q --user -r requirements-dev.txt && python -m pytest -q -p no:cacheprovider"
+
+# frontend type check + tests
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -v "$PWD/frontend:/app" -w /app node:22-alpine \
+  sh -c "npm ci && npx tsc -b && npx vitest run"
 ```

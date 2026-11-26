@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
-import type { Direction } from "./leitner";
+import type { Direction } from "./srs";
 
 const STORAGE_KEY = "leitner.direction";
 const CHANGE_EVENT = "leitner-direction-change";

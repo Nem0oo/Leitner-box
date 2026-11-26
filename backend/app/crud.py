@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models
-from app.leitner import DIRECTIONS, CardDirectionState, compute_state, due_at, is_due
+from app.srs import DIRECTIONS, CardDirectionState, compute_state, is_due
 
 
 def get_card_states(db: Session, card_ids: list[int] | None = None) -> dict[tuple[int, str], CardDirectionState]:
@@ -37,10 +37,14 @@ def get_card_states(db: Session, card_ids: list[int] | None = None) -> dict[tupl
 def card_direction_state_out(state: CardDirectionState, now: float | None = None) -> dict:
     now = now if now is not None else time.time()
     return {
-        "box": state.box,
+        "state": state.state,
+        "step": state.step,
+        "stability": state.stability,
+        "difficulty": state.difficulty,
         "last_review_at": state.last_review_at,
-        "due_at": due_at(state.box, state.last_review_at),
+        "due_at": state.due_at,
         "is_due": is_due(state, now),
+        "review_count": state.review_count,
     }
 
 

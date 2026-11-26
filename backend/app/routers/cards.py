@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
 from app.database import get_db
-from app.leitner import DIRECTIONS, MAX_BOX, MIN_BOX
+from app.srs import DIRECTIONS, STATES
 
 router = APIRouter(prefix="/api/cards", tags=["cards"])
 
@@ -15,13 +15,13 @@ router = APIRouter(prefix="/api/cards", tags=["cards"])
 def list_cards(
     deck_id: int | None = None,
     direction: str = "recto_to_verso",
-    box: int | None = None,
+    state: str | None = None,
     db: Session = Depends(get_db),
 ):
     if direction not in DIRECTIONS:
         raise HTTPException(400, "invalid direction")
-    if box is not None and not (MIN_BOX <= box <= MAX_BOX):
-        raise HTTPException(400, "invalid box")
+    if state is not None and state not in STATES:
+        raise HTTPException(400, "invalid state")
 
     query = select(models.Card).where(models.Card.deleted.is_(False))
     if deck_id is not None:
@@ -31,8 +31,8 @@ def list_cards(
     now = time.time()
     states = crud.get_card_states(db, [c.id for c in cards])
     out = [crud.serialize_card(c, states, now) for c in cards]
-    if box is not None:
-        out = [c for c in out if c[direction]["box"] == box]
+    if state is not None:
+        out = [c for c in out if c[direction]["state"] == state]
     return out
 
 

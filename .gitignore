@@ -9,4 +9,12 @@ frontend/dist
 .env.age
 *.db
 data/
+edit/
 .DS_Store
+
+# Claude
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+CLAUDE-SECURITY-*/
+docs/plans/

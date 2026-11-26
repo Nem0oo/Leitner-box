@@ -1,12 +1,7 @@
 import Dexie, { type Table } from "dexie";
-import type { Direction } from "./leitner";
+import type { Direction, DirectionState, ReviewRating } from "./srs";
 
-export interface DirectionState {
-  box: number;
-  last_review_at: number | null;
-  due_at: number | null;
-  is_due: boolean;
-}
+export type { DirectionState };
 
 export interface LocalDeck {
   id: number;
@@ -34,7 +29,8 @@ export interface PendingReviewEvent {
   id: string;
   card_id: number;
   direction: Direction;
-  result: "success" | "fail";
+  // "success" / "fail" may still sit in a queue written before FSRS; the server maps them to good / again.
+  result: ReviewRating | "success" | "fail";
   timestamp: number;
 }
 
@@ -64,6 +60,16 @@ class LeitnerDB extends Dexie {
       blobs: "hash",
       kv: "key",
     });
+    // v2: per-direction state moved from Leitner boxes to FSRS. Cached decks and
+    // cards are dropped so ensureSeeded() pulls them again in the new shape;
+    // the pending review queue is kept.
+    this.version(2)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx.table("decks").clear();
+        await tx.table("cards").clear();
+        await tx.table("kv").delete("last_sync");
+      });
   }
 }
 

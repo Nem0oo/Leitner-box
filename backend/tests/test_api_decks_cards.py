@@ -20,12 +20,16 @@ def test_create_and_list_decks(client):
     assert decks[0]["card_count"] == 0
 
 
-def test_create_card_starts_in_box_1_both_directions(client):
+def test_create_card_starts_new_in_both_directions(client):
     deck = _create_deck(client)
     card = _create_card(client, deck["id"])
-    assert card["recto_to_verso"]["box"] == 1
-    assert card["verso_to_recto"]["box"] == 1
-    assert card["recto_to_verso"]["is_due"] is True
+    for direction in ("recto_to_verso", "verso_to_recto"):
+        state = card[direction]
+        assert state["state"] == "new"
+        assert state["review_count"] == 0
+        assert state["stability"] is None
+        assert state["due_at"] is None
+        assert state["is_due"] is True
 
 
 def test_card_in_nonexistent_deck_404(client):
@@ -55,31 +59,32 @@ def test_delete_deck_cascades_to_its_cards(client):
     assert r.status_code == 404
 
 
-def test_filter_cards_by_box(client):
+def test_filter_cards_by_state(client):
     deck = _create_deck(client)
     card1 = _create_card(client, deck["id"])
     card2 = _create_card(client, deck["id"])
 
     client.post("/api/review/events", json={
-        "card_id": card1["id"], "direction": "recto_to_verso", "result": "success",
+        "card_id": card1["id"], "direction": "recto_to_verso", "result": "good",
     })
 
-    r = client.get("/api/cards", params={"deck_id": deck["id"], "direction": "recto_to_verso", "box": 2})
-    boxed = r.json()
-    assert [c["id"] for c in boxed] == [card1["id"]]
+    r = client.get("/api/cards", params={"deck_id": deck["id"], "direction": "recto_to_verso", "state": "learning"})
+    assert [c["id"] for c in r.json()] == [card1["id"]]
 
-    r = client.get("/api/cards", params={"deck_id": deck["id"], "direction": "recto_to_verso", "box": 1})
-    boxed = r.json()
-    assert [c["id"] for c in boxed] == [card2["id"]]
+    r = client.get("/api/cards", params={"deck_id": deck["id"], "direction": "recto_to_verso", "state": "new"})
+    assert [c["id"] for c in r.json()] == [card2["id"]]
+
+    r = client.get("/api/cards", params={"deck_id": deck["id"], "state": "bogus"})
+    assert r.status_code == 400
 
 
 def test_deck_due_count_reflects_active_direction(client):
     deck = _create_deck(client)
     card = _create_card(client, deck["id"])
     client.post("/api/review/events", json={
-        "card_id": card["id"], "direction": "recto_to_verso", "result": "success",
+        "card_id": card["id"], "direction": "recto_to_verso", "result": "good",
     })
-    # recto_to_verso just reviewed -> box 2, interval 2 days -> not due now
+    # recto_to_verso just reviewed -> learning step, due again in 10 minutes
     r = client.get(f"/api/decks/{deck['id']}", params={"direction": "recto_to_verso"})
     assert r.json()["due_count"] == 0
     # verso_to_recto never reviewed -> still due
