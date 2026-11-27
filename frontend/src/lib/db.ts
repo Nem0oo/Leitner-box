@@ -70,8 +70,18 @@ class LeitnerDB extends Dexie {
         await tx.table("cards").clear();
         await tx.table("kv").delete("last_sync");
       });
+    // v3: FSRS state is counted in local review days. Flag a one-time full
+    // pull so ensureSeeded() replaces every cached state with the server's,
+    // keeping decks and their offline preference.
+    this.version(3)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx.table("kv").put({ key: FULL_PULL_KEY, value: "1" });
+      });
   }
 }
+
+export const FULL_PULL_KEY = "needs_full_pull";
 
 export const db = new LeitnerDB();
 

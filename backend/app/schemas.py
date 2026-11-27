@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---- Decks ----
@@ -50,6 +50,7 @@ class CardDirectionStateOut(BaseModel):
     due_at: float | None
     is_due: bool
     review_count: int
+    first_review_at: float | None  # first rating since the last reset
 
 
 class CardOut(BaseModel):
@@ -120,6 +121,7 @@ class SettingsOut(BaseModel):
     reminder_enabled: bool
     reminder_timezone: str
     direction: str
+    new_cards_per_day: int
     vapid_public_key: str
 
 
@@ -128,6 +130,7 @@ class SettingsUpdate(BaseModel):
     reminder_enabled: bool | None = None
     reminder_timezone: str | None = None
     direction: str | None = None
+    new_cards_per_day: int | None = Field(default=None, ge=0)
 
 
 class PushSubscriptionIn(BaseModel):

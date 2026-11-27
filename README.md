@@ -11,7 +11,7 @@ Personal spaced-repetition flashcard app, self-hosted as a single Docker contain
 
 ## Deployment
 
-The app is designed to run behind an existing `nginx-proxy` + Let's Encrypt setup, on the external Docker network `nginx-proxy`. CI (`.github/workflows/ci.yml`) builds the image and pushes it to Docker Hub on every push to `main`, then triggers a `watchtower` redeploy via the existing n8n webhook. On the server, only `docker-compose.yml` and `.env` need to be managed — there is no local build step.
+The app is designed to run behind an existing `nginx-proxy` + Let's Encrypt setup, on the external Docker network `reseau_interne` (compose network `frontend`). CI (`.github/workflows/ci.yml`) builds the image and pushes it to Docker Hub on every push to `main`, then triggers a `watchtower` redeploy via the existing n8n webhook. On the server, only `docker-compose.yml` and `.env` need to be managed — there is no local build step.
 
 1. Generate VAPID keys for Web Push:
 
@@ -62,8 +62,8 @@ The whole app (every `/api/*` route except `/api/health`, `/api/version` and the
 
 Both are host folders bind-mounted next to `docker-compose.yml`:
 
-- `./data` (`/data`): SQLite DB + content-addressed media blobs
-- `./edit` (`/edit`): manual editing folder, scanned by the indexer on startup and via `POST /api/indexer/rescan`. Cards live under `<edit>/<deck_name>/carte_XXXX/` with `recto.*`/`verso.*` files.
+- `./leitner_data` (`/data`): SQLite DB + content-addressed media blobs
+- `./leitner_edit` (`/edit`): manual editing folder, scanned by the indexer on startup and via `POST /api/indexer/rescan`. Cards live under `<edit>/<deck_name>/carte_XXXX/` with `recto.*`/`verso.*` files.
   For text-only cards, drop a `<edit>/<deck_name>/cartes.txt` file instead, one `recto;verso` pair per line (the separator is the first `;`, so `verso` may contain `;` but `recto` may not). Each scan turns every line into its own `carte_XXXX/recto.txt` + `verso.txt` and removes it from `cartes.txt`.
 
 ## Development

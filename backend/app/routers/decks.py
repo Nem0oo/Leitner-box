@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
 from app.database import get_db
-from app.srs import DIRECTIONS
+from app.srs import DIRECTIONS, RESET
 
 router = APIRouter(prefix="/api/decks", tags=["decks"])
 
@@ -82,5 +82,26 @@ def delete_deck(deck_id: int, db: Session = Depends(get_db)):
     ).scalars().all()
     for card in cards:
         card.deleted = True
+        card.last_modified = now
+    db.commit()
+
+
+@router.post("/{deck_id}/reset", status_code=204)
+def reset_deck(deck_id: int, db: Session = Depends(get_db)):
+    """Start every card of the deck over as new, in both directions. The
+    review history is kept: a RESET event makes the replay ignore what came
+    before it. Cards are touched so a sync pull brings their new state."""
+    deck = db.get(models.Deck, deck_id)
+    if deck is None or deck.deleted:
+        raise HTTPException(404, "deck not found")
+    now = time.time()
+    cards = db.execute(
+        select(models.Card).where(models.Card.deck_id == deck_id, models.Card.deleted.is_(False))
+    ).scalars().all()
+    for card in cards:
+        for direction in DIRECTIONS:
+            db.add(models.ReviewEvent(
+                id=models.new_uuid(), card_id=card.id, direction=direction, result=RESET, timestamp=now,
+            ))
         card.last_modified = now
     db.commit()

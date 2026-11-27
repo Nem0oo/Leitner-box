@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import crud, models, schemas
+from app import crud, models, schemas, settings_store
 from app.database import get_db
 from app.srs import DIRECTIONS, STATES
 
@@ -30,7 +30,8 @@ def list_cards(
 
     now = time.time()
     states = crud.get_card_states(db, [c.id for c in cards])
-    out = [crud.serialize_card(c, states, now) for c in cards]
+    tz = settings_store.get_timezone(db)
+    out = [crud.serialize_card(c, states, tz, now) for c in cards]
     if state is not None:
         out = [c for c in out if c[direction]["state"] == state]
     return out
@@ -53,7 +54,7 @@ def create_card(payload: schemas.CardCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(card)
     states = crud.get_card_states(db, [card.id])
-    return crud.serialize_card(card, states)
+    return crud.serialize_card(card, states, settings_store.get_timezone(db))
 
 
 @router.get("/{card_id}", response_model=schemas.CardOut)
@@ -62,7 +63,7 @@ def get_card(card_id: int, db: Session = Depends(get_db)):
     if card is None or card.deleted:
         raise HTTPException(404, "card not found")
     states = crud.get_card_states(db, [card.id])
-    return crud.serialize_card(card, states)
+    return crud.serialize_card(card, states, settings_store.get_timezone(db))
 
 
 @router.patch("/{card_id}", response_model=schemas.CardOut)
@@ -87,7 +88,7 @@ def update_card(card_id: int, payload: schemas.CardUpdate, db: Session = Depends
     db.commit()
     db.refresh(card)
     states = crud.get_card_states(db, [card.id])
-    return crud.serialize_card(card, states)
+    return crud.serialize_card(card, states, settings_store.get_timezone(db))
 
 
 @router.delete("/{card_id}", status_code=204)

@@ -9,7 +9,8 @@ frontend/dist
 .env.age
 *.db
 data/
-edit/
+leitner_data/
+leitner_edit/
 .DS_Store
 
 # Claude

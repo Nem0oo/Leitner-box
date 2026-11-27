@@ -5,17 +5,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import crud, models, schemas
+from app import crud, models, schemas, settings_store
 from app.database import get_db
-from app.srs import DIRECTIONS, is_due, normalize_rating
+from app.srs import DIRECTIONS, normalize_rating
 
 router = APIRouter(prefix="/api/review", tags=["review"])
 
 
 @router.get("/due", response_model=list[schemas.DueCardOut])
 def due_cards(deck_id: int | None = None, direction: str = "recto_to_verso", db: Session = Depends(get_db)):
-    """Cards due now, in random order. Order is generated fresh on every
-    call and never persisted, per spec (no fixed seed, never repeats)."""
+    """Cards due now (new cards within the daily limit), in random order.
+    Order is generated fresh on every call and never persisted, per spec
+    (no fixed seed, never repeats)."""
     if direction not in DIRECTIONS:
         raise HTTPException(400, "invalid direction")
 
@@ -30,6 +31,8 @@ def due_cards(deck_id: int | None = None, direction: str = "recto_to_verso", db:
 
     now = time.time()
     states = crud.get_card_states(db, [c.id for c, _ in rows])
+    tz = settings_store.get_timezone(db)
+    selected = set(crud.due_card_ids(db, [c.id for c, _ in rows], direction, now))
     due = [
         schemas.DueCardOut(
             id=card.id,
@@ -40,10 +43,10 @@ def due_cards(deck_id: int | None = None, direction: str = "recto_to_verso", db:
             verso_text=card.verso_text,
             verso_media=card.verso_media or [],
             direction=direction,
-            state=crud.card_direction_state_out(states[(card.id, direction)], now),
+            state=crud.card_direction_state_out(states[(card.id, direction)], tz, now),
         )
         for card, deck_name in rows
-        if is_due(states[(card.id, direction)], now)
+        if card.id in selected
     ]
     random.shuffle(due)
     return due

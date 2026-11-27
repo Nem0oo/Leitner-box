@@ -107,9 +107,85 @@ def test_batch_review_events_idempotent_on_repeated_id(client):
     assert card_state["recto_to_verso"]["review_count"] == 1  # only applied once, not twice
 
 
+def test_due_count_follows_the_configured_timezone(client, db):
+    from app import crud
+
+    deck = _create_deck(client)
+    card = _create_card(client, deck["id"])
+    # easy on a new card -> review state due 8 days later, at 03:30 UTC (04:30 Paris)
+    reviewed_at = 1_767_324_600.0  # 2026-01-02 03:30 UTC
+    client.post("/api/review/events", json={
+        "card_id": card["id"], "direction": "recto_to_verso", "result": "easy", "timestamp": reviewed_at,
+    })
+    now = 1_767_960_000.0  # 2026-01-09 12:00 UTC: same review day as the due time in UTC, the day before in Paris
+
+    assert crud.due_count_for_cards(db, [card["id"]], "recto_to_verso", now) == 1
+    client.put("/api/settings", json={"reminder_timezone": "Europe/Paris"})
+    db.expire_all()
+    assert crud.due_count_for_cards(db, [card["id"]], "recto_to_verso", now) == 0
+
+
 def test_due_count_endpoint(client):
     deck = _create_deck(client)
     _create_card(client, deck["id"])
     _create_card(client, deck["id"])
     r = client.get("/api/review/due-count", params={"deck_id": deck["id"]})
     assert r.json()["due_count"] == 2
+
+
+def test_new_cards_per_day_limits_due_new_cards(client):
+    client.put("/api/settings", json={"new_cards_per_day": 2})
+    deck = _create_deck(client)
+    cards = [_create_card(client, deck["id"], recto=str(i)) for i in range(3)]
+    due = client.get("/api/review/due").json()
+    assert sorted(c["id"] for c in due) == [cards[0]["id"], cards[1]["id"]]
+    assert client.get("/api/review/due-count").json()["due_count"] == 2
+    assert client.get("/api/decks").json()[0]["due_count"] == 2
+
+
+def test_new_cards_reviewed_today_use_up_the_daily_limit(client):
+    client.put("/api/settings", json={"new_cards_per_day": 2})
+    deck = _create_deck(client)
+    other = _create_deck(client, "Allemand")
+    first = _create_card(client, other["id"])
+    cards = [_create_card(client, deck["id"], recto=str(i)) for i in range(3)]
+    client.post("/api/review/events", json={"card_id": first["id"], "direction": "recto_to_verso", "result": "good"})
+    due = client.get("/api/review/due", params={"deck_id": deck["id"]}).json()
+    assert [c["id"] for c in due] == [cards[0]["id"]]
+    # the limit is per direction
+    other_direction = client.get("/api/review/due", params={"direction": "verso_to_recto"}).json()
+    assert len(other_direction) == 2
+
+
+def test_reset_deck_makes_its_cards_new_again(client):
+    deck = _create_deck(client)
+    other = _create_deck(client, "Allemand")
+    card = _create_card(client, deck["id"])
+    kept = _create_card(client, other["id"])
+    for cid in (card["id"], kept["id"]):
+        for direction in ("recto_to_verso", "verso_to_recto"):
+            client.post("/api/review/events", json={"card_id": cid, "direction": direction, "result": "easy"})
+    before = client.get(f"/api/cards/{card['id']}").json()
+
+    r = client.post(f"/api/decks/{deck['id']}/reset")
+    assert r.status_code == 204
+
+    after = client.get(f"/api/cards/{card['id']}").json()
+    assert after["recto_to_verso"]["state"] == "new"
+    assert after["verso_to_recto"]["state"] == "new"
+    assert after["recto_to_verso"]["review_count"] == 0
+    assert after["last_modified"] > before["last_modified"]
+    assert client.get(f"/api/cards/{kept['id']}").json()["recto_to_verso"]["state"] == "review"
+
+
+def test_reset_unknown_deck_is_404(client):
+    assert client.post("/api/decks/999/reset").status_code == 404
+
+
+def test_reset_is_not_accepted_as_a_review_result(client):
+    deck = _create_deck(client)
+    card = _create_card(client, deck["id"])
+    r = client.post("/api/review/events", json={
+        "card_id": card["id"], "direction": "recto_to_verso", "result": "reset",
+    })
+    assert r.status_code == 400

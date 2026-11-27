@@ -13,11 +13,14 @@ services:
       LEITNER_EDIT_DIR: /edit
       LEITNER_AUTH_PASSWORD: ${LEITNER_AUTH_PASSWORD}
     volumes:
-      - ./data:/data
-      - ./edit:/edit
+      - ./leitner_data:/data
+      - ./leitner_edit:/edit
     networks:
-      - nginx-proxy
+      - frontend
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
 networks:
-  nginx-proxy:
+  frontend:
+    name: reseau_interne
     external: true
