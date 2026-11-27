@@ -14,20 +14,25 @@ router = APIRouter(prefix="/api/sync", tags=["sync"])
 @router.get("/pull", response_model=schemas.SyncPullResponse)
 def pull(since: float | None = None, db: Session = Depends(get_db)):
     """Everything (decks + cards, including tombstones) modified after
-    `since`. Devices cache the result in IndexedDB for offline use."""
+    `since`, plus the deck of every returned card so a device always has the
+    deck its cards belong to. Devices cache the result in IndexedDB for
+    offline use."""
     now = time.time()
-
-    deck_query = select(models.Deck)
-    if since is not None:
-        deck_query = deck_query.where(models.Deck.last_modified > since)
-    decks = db.execute(deck_query).scalars().all()
-    # tombstones (deleted=True) are intentionally included so clients can
-    # remove decks they previously cached, rather than resurrecting them
 
     card_query = select(models.Card)
     if since is not None:
         card_query = card_query.where(models.Card.last_modified > since)
     cards = db.execute(card_query).scalars().all()
+
+    deck_query = select(models.Deck)
+    if since is not None:
+        card_deck_ids = {c.deck_id for c in cards}
+        deck_query = deck_query.where(
+            (models.Deck.last_modified > since) | models.Deck.id.in_(card_deck_ids)
+        )
+    decks = db.execute(deck_query.order_by(models.Deck.id)).scalars().all()
+    # tombstones (deleted=True) are intentionally included so clients can
+    # remove decks they previously cached, rather than resurrecting them
 
     states = crud.get_card_states(db, [c.id for c in cards])
     tz = settings_store.get_timezone(db)

@@ -5,7 +5,7 @@ import { api } from "../lib/api";
 import { db, type LocalDeck } from "../lib/db";
 import { useDirection } from "../lib/direction";
 import { dueCount, ensureSeeded } from "../lib/review";
-import { downloadDeckMedia } from "../lib/sync";
+import { downloadDeckMedia, fullSync } from "../lib/sync";
 
 interface DeckRow extends LocalDeck {
   card_count: number;
@@ -73,7 +73,14 @@ export default function DeckList() {
       setRescanMessage(`Scan terminé: ${JSON.stringify(result)}`);
     } catch {
       setRescanMessage("Scan impossible (hors ligne ?)");
+      return;
     }
+    try {
+      await fullSync();
+    } catch {
+      setRescanMessage((m) => `${m} — synchronisation impossible, utilisez « Synchroniser » sur l'accueil.`);
+    }
+    await load();
   }
 
   return (
