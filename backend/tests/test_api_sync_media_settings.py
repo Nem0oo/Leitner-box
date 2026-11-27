@@ -41,7 +41,7 @@ def test_sync_pull_filters_by_since(client):
     r2 = client.get("/api/sync/pull", params={"since": checkpoint})
     body = r2.json()
     assert len(body["cards"]) == 1
-    assert len(body["decks"]) == 0  # deck unchanged since checkpoint
+    assert [d["id"] for d in body["decks"]] == [deck["id"]]  # sent along with its changed card
 
 
 def test_media_upload_then_download_roundtrip(client):
@@ -104,3 +104,14 @@ def test_new_cards_per_day_setting_persists_and_rejects_negative(client):
     assert client.put("/api/settings", json={"new_cards_per_day": 25}).json()["new_cards_per_day"] == 25
     assert client.get("/api/settings").json()["new_cards_per_day"] == 25
     assert client.put("/api/settings", json={"new_cards_per_day": -1}).status_code == 422
+
+
+def test_sync_pull_includes_the_deck_of_every_changed_card(client):
+    deck = _create_deck(client)
+    other = _create_deck(client, "Allemand")
+    checkpoint = client.get("/api/sync/pull").json()["server_time"]
+
+    _create_card(client, deck["id"])
+    body = client.get("/api/sync/pull", params={"since": checkpoint}).json()
+    assert [d["id"] for d in body["decks"]] == [deck["id"]]  # a client missing the deck still gets it
+    assert other["id"] not in [d["id"] for d in body["decks"]]

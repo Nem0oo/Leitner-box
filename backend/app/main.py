@@ -4,7 +4,6 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 from app import auth
 from app.config import settings
@@ -12,6 +11,7 @@ from app.database import init_db
 from app.indexer import scan_edit_dir
 from app.routers import auth as auth_router
 from app.routers import cards, decks, indexer, media, push, reviews, settings as settings_router, sync
+from app.spa import SpaStaticFiles
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -85,4 +85,4 @@ def version():
 
 
 if FRONTEND_DIST.exists():
-    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
+    app.mount("/", SpaStaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
