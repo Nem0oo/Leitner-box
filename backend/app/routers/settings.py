@@ -15,6 +15,7 @@ def get_settings(db: Session = Depends(get_db)):
         reminder_enabled=settings_store.get_bool(db, "reminder_enabled"),
         reminder_timezone=settings_store.get_setting(db, "reminder_timezone") or "UTC",
         direction=settings_store.get_setting(db, "direction"),
+        new_cards_per_day=settings_store.get_int(db, "new_cards_per_day"),
         vapid_public_key=settings.vapid_public_key,
     )
 
@@ -29,5 +30,7 @@ def update_settings(payload: schemas.SettingsUpdate, db: Session = Depends(get_d
         settings_store.set_setting(db, "reminder_timezone", payload.reminder_timezone)
     if payload.direction is not None:
         settings_store.set_setting(db, "direction", payload.direction)
+    if payload.new_cards_per_day is not None:
+        settings_store.set_setting(db, "new_cards_per_day", str(payload.new_cards_per_day))
     db.commit()
     return get_settings(db)

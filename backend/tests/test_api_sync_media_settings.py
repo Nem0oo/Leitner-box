@@ -80,6 +80,7 @@ def test_settings_defaults(client):
     body = r.json()
     assert body["reminder_enabled"] is False
     assert body["direction"] == "recto_to_verso"
+    assert body["new_cards_per_day"] == 10
 
 
 def test_settings_update_persists(client):
@@ -97,3 +98,9 @@ def test_push_subscribe_and_unsubscribe(client):
     assert r.status_code == 201
     r2 = client.post("/api/push/unsubscribe", json=payload)
     assert r2.status_code == 204
+
+
+def test_new_cards_per_day_setting_persists_and_rejects_negative(client):
+    assert client.put("/api/settings", json={"new_cards_per_day": 25}).json()["new_cards_per_day"] == 25
+    assert client.get("/api/settings").json()["new_cards_per_day"] == 25
+    assert client.put("/api/settings", json={"new_cards_per_day": -1}).status_code == 422

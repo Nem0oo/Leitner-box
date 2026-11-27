@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import crud, models, schemas
+from app import crud, models, schemas, settings_store
 from app.database import get_db
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
@@ -30,6 +30,7 @@ def pull(since: float | None = None, db: Session = Depends(get_db)):
     cards = db.execute(card_query).scalars().all()
 
     states = crud.get_card_states(db, [c.id for c in cards])
+    tz = settings_store.get_timezone(db)
     deck_out = []
     for d in decks:
         card_ids = [cid for cid, in db.execute(
@@ -43,7 +44,7 @@ def pull(since: float | None = None, db: Session = Depends(get_db)):
     return schemas.SyncPullResponse(
         server_time=now,
         decks=deck_out,
-        cards=[crud.serialize_card(c, states, now) for c in cards],
+        cards=[crud.serialize_card(c, states, tz, now) for c in cards],
     )
 
 

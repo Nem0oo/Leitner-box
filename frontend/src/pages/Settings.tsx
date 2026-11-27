@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { Layout } from "../components/Layout";
 import { api } from "../lib/api";
+import { DEFAULT_NEW_CARDS_PER_DAY } from "../lib/dailyLimit";
 import { disableNotifications, enableNotifications, isStandalonePWA, pushSupported } from "../lib/push";
+import { cacheNewCardsPerDay } from "../lib/review";
 import { isMuted, setMuted } from "../lib/sound";
 
 export default function Settings() {
   const [reminderTime, setReminderTime] = useState("");
   const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [newCardsPerDay, setNewCardsPerDay] = useState(String(DEFAULT_NEW_CARDS_PER_DAY));
+  const [savingLimit, setSavingLimit] = useState(false);
   const [muted, setMutedState] = useState(isMuted());
   const [notifStatus, setNotifStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -16,6 +20,8 @@ export default function Settings() {
     api.getSettings().then((s) => {
       setReminderTime(s.reminder_time ?? "20:00");
       setReminderEnabled(s.reminder_enabled);
+      setNewCardsPerDay(String(s.new_cards_per_day));
+      cacheNewCardsPerDay(s.new_cards_per_day);
     });
     api.authStatus().then((s) => setAuthEnabled(s.auth_enabled));
   }, []);
@@ -34,6 +40,23 @@ export default function Settings() {
       alert("Enregistrement impossible (hors ligne ?)");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveNewCardsPerDay() {
+    const value = Number(newCardsPerDay);
+    if (newCardsPerDay.trim() === "" || !Number.isInteger(value) || value < 0) {
+      alert("Indiquez un nombre entier positif ou nul.");
+      return;
+    }
+    setSavingLimit(true);
+    try {
+      const saved = await api.updateSettings({ new_cards_per_day: value });
+      await cacheNewCardsPerDay(saved.new_cards_per_day);
+    } catch {
+      alert("Enregistrement impossible (hors ligne ?)");
+    } finally {
+      setSavingLimit(false);
     }
   }
 
@@ -69,6 +92,26 @@ export default function Settings() {
 
   return (
     <Layout title="Réglages">
+      <div className="card-panel">
+        <div className="form-field">
+          <label>Nouvelles cartes par jour</label>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={1}
+            value={newCardsPerDay}
+            onChange={(e) => setNewCardsPerDay(e.target.value)}
+          />
+        </div>
+        <div className="row">
+          <span className="muted">Tous decks confondus, par sens de révision.</span>
+          <button className="btn secondary" onClick={saveNewCardsPerDay} disabled={savingLimit}>
+            {savingLimit ? "…" : "Enregistrer"}
+          </button>
+        </div>
+      </div>
+
       <div className="card-panel">
         <div className="form-field">
           <label>Heure du rappel quotidien</label>

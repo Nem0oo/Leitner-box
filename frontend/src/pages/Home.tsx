@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { DirectionToggle } from "../components/DirectionToggle";
 import { Layout } from "../components/Layout";
 import { useDirection } from "../lib/direction";
-import { dueCount, ensureSeeded } from "../lib/review";
+import { dueCount, ensureSeeded, refreshNewCardsPerDay } from "../lib/review";
 import { fullSync } from "../lib/sync";
 
 export default function Home() {
@@ -15,6 +15,7 @@ export default function Home() {
 
   async function refresh() {
     await ensureSeeded();
+    await refreshNewCardsPerDay();
     setDue(await dueCount(undefined, direction));
   }
 

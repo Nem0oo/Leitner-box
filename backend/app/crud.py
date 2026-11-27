@@ -2,17 +2,27 @@ from __future__ import annotations
 
 import time
 from itertools import groupby
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import models
-from app.srs import DIRECTIONS, CardDirectionState, compute_state, is_due
+from app import models, settings_store
+from app.srs import (
+    DIRECTIONS,
+    CardDirectionState,
+    compute_state,
+    is_due,
+    new_cards_introduced_on,
+    select_due,
+)
 
 
 def get_card_states(db: Session, card_ids: list[int] | None = None) -> dict[tuple[int, str], CardDirectionState]:
     """Compute {(card_id, direction): CardDirectionState} for the given cards
-    (or all cards if None) from the full ReviewEvent history."""
+    (or all cards if None) from the full ReviewEvent history, counting review
+    days in the user's timezone."""
+    tz = settings_store.get_timezone(db)
     query = select(models.ReviewEvent.card_id, models.ReviewEvent.direction,
                     models.ReviewEvent.timestamp, models.ReviewEvent.result)
     if card_ids is not None:
@@ -23,7 +33,7 @@ def get_card_states(db: Session, card_ids: list[int] | None = None) -> dict[tupl
     states: dict[tuple[int, str], CardDirectionState] = {}
     for (card_id, direction), group in groupby(rows, key=lambda r: (r[0], r[1])):
         timestamped = [(ts, result) for _, _, ts, result in group]
-        states[(card_id, direction)] = compute_state(timestamped)
+        states[(card_id, direction)] = compute_state(timestamped, tz)
 
     target_ids = card_ids if card_ids is not None else [
         cid for cid, in db.execute(select(models.Card.id)).all()
@@ -34,7 +44,7 @@ def get_card_states(db: Session, card_ids: list[int] | None = None) -> dict[tupl
     return states
 
 
-def card_direction_state_out(state: CardDirectionState, now: float | None = None) -> dict:
+def card_direction_state_out(state: CardDirectionState, tz: ZoneInfo, now: float | None = None) -> dict:
     now = now if now is not None else time.time()
     return {
         "state": state.state,
@@ -43,12 +53,18 @@ def card_direction_state_out(state: CardDirectionState, now: float | None = None
         "difficulty": state.difficulty,
         "last_review_at": state.last_review_at,
         "due_at": state.due_at,
-        "is_due": is_due(state, now),
+        "is_due": is_due(state, now, tz),
         "review_count": state.review_count,
+        "first_review_at": state.first_review_at,
     }
 
 
-def serialize_card(card: models.Card, states: dict[tuple[int, str], CardDirectionState], now: float | None = None) -> dict:
+def serialize_card(
+    card: models.Card,
+    states: dict[tuple[int, str], CardDirectionState],
+    tz: ZoneInfo,
+    now: float | None = None,
+) -> dict:
     now = now if now is not None else time.time()
     return {
         "id": card.id,
@@ -59,12 +75,24 @@ def serialize_card(card: models.Card, states: dict[tuple[int, str], CardDirectio
         "verso_media": card.verso_media or [],
         "last_modified": card.last_modified,
         "deleted": card.deleted,
-        "recto_to_verso": card_direction_state_out(states[(card.id, "recto_to_verso")], now),
-        "verso_to_recto": card_direction_state_out(states[(card.id, "verso_to_recto")], now),
+        "recto_to_verso": card_direction_state_out(states[(card.id, "recto_to_verso")], tz, now),
+        "verso_to_recto": card_direction_state_out(states[(card.id, "verso_to_recto")], tz, now),
     }
 
 
-def due_count_for_cards(db: Session, card_ids: list[int], direction: str, now: float | None = None) -> int:
+def due_card_ids(db: Session, card_ids: list[int], direction: str, now: float | None = None) -> list[int]:
+    """Cards among `card_ids` to review now in `direction`: every due card
+    already introduced, plus the new cards still allowed today by the
+    new_cards_per_day setting (counted over all cards)."""
     now = now if now is not None else time.time()
-    states = get_card_states(db, card_ids)
-    return sum(1 for cid in card_ids if is_due(states[(cid, direction)], now))
+    tz = settings_store.get_timezone(db)
+    all_ids = [cid for cid, in db.execute(select(models.Card.id).where(models.Card.deleted.is_(False))).all()]
+    states = get_card_states(db, all_ids)
+    introduced = new_cards_introduced_on((states[(cid, direction)] for cid in all_ids), now, tz)
+    slots = settings_store.get_int(db, "new_cards_per_day") - introduced
+    candidates = {cid: states.get((cid, direction)) or compute_state([]) for cid in card_ids}
+    return select_due(candidates, now, tz, new_slots=slots)
+
+
+def due_count_for_cards(db: Session, card_ids: list[int], direction: str, now: float | None = None) -> int:
+    return len(due_card_ids(db, card_ids, direction, now))

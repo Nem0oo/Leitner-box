@@ -3,7 +3,13 @@
  * fuzz disabled), used for immediate optimistic updates while review events
  * wait in the offline queue. The server replays the full ReviewEvent history
  * and stays the source of truth once synced; both sides are checked against
- * the same reference sequence in their tests.
+ * the same reference sequences in their tests.
+ *
+ * Time is counted in review days starting at DAY_ROLLOVER_HOUR local time
+ * (timezone argument, the device's when omitted): a review card is due from
+ * the start of its due day, and FSRS sees the elapsed time as a difference of
+ * review days. See backend/app/srs.py for the "review clock" both sides feed
+ * to their FSRS library.
  */
 import { type Card, type Grade, Rating, State, createEmptyCard, fsrs, generatorParameters } from "ts-fsrs";
 
@@ -24,6 +30,8 @@ export interface DirectionState {
   due_at: number | null;
   is_due: boolean;
   review_count: number;
+  /** First rating since the last deck reset; may be missing from states cached before it existed. */
+  first_review_at: number | null;
 }
 
 export const NEW_STATE: DirectionState = {
@@ -35,6 +43,7 @@ export const NEW_STATE: DirectionState = {
   due_at: null,
   is_due: true,
   review_count: 0,
+  first_review_at: null,
 };
 
 export const RATING_LABELS: Record<ReviewRating, string> = {
@@ -74,14 +83,49 @@ const FROM_FSRS_STATE: Record<State, SrsState> = {
   [State.Relearning]: "relearning",
 };
 
+export const DAY_ROLLOVER_HOUR = 4;
+const SECONDS_PER_DAY = 86400;
+
 function toDate(seconds: number): Date {
   return new Date(seconds * 1000);
 }
 
-function toFsrsCard(s: DirectionState, now: number): Card {
-  if (s.state === "new" || s.last_review_at === null || s.due_at === null) return createEmptyCard(toDate(now));
+/** Offset of `timeZone` (device timezone when undefined) from UTC at `ts`, in seconds. */
+export function utcOffsetSeconds(ts: number, timeZone?: string): number {
+  const date = toDate(Math.floor(ts));
+  if (timeZone === undefined) return -date.getTimezoneOffset() * 60;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+    })
+      .formatToParts(date)
+      .map((p) => [p.type, Number(p.value)]),
+  );
+  const wallClock = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return Math.round((wallClock - date.getTime()) / 1000);
+}
+
+/** Local wall-clock time minus the day rollover, as epoch seconds: its UTC calendar day is the review day of `ts`. */
+function reviewClock(ts: number, timeZone?: string): number {
+  return ts + utcOffsetSeconds(ts, timeZone) - DAY_ROLLOVER_HOUR * 3600;
+}
+
+/** Index of the review day containing `ts` (days since the epoch). */
+export function reviewDay(ts: number, timeZone?: string): number {
+  return Math.floor(reviewClock(ts, timeZone) / SECONDS_PER_DAY);
+}
+
+function toFsrsCard(s: DirectionState, clock: number, timeZone?: string): Card {
+  if (s.state === "new" || s.last_review_at === null || s.due_at === null) return createEmptyCard(toDate(clock));
   return {
-    due: toDate(s.due_at),
+    due: toDate(reviewClock(s.due_at, timeZone)),
     stability: s.stability ?? 0,
     difficulty: s.difficulty ?? 0,
     elapsed_days: 0,
@@ -90,11 +134,15 @@ function toFsrsCard(s: DirectionState, now: number): Card {
     reps: s.review_count,
     lapses: 0,
     state: TO_FSRS_STATE[s.state],
-    last_review: toDate(s.last_review_at),
+    // Pinned to the start of its review day so the elapsed time is a whole number of review days.
+    last_review: toDate(reviewDay(s.last_review_at, timeZone) * SECONDS_PER_DAY),
   };
 }
 
-function fromFsrsCard(card: Card, reviewedAt: number, reviewCount: number): DirectionState {
+/** State after reviewing `s` with `rating` at `now` (epoch seconds). */
+export function nextState(s: DirectionState, rating: ReviewRating, now: number, timeZone?: string): DirectionState {
+  const clock = reviewClock(now, timeZone);
+  const { card } = scheduler.next(toFsrsCard(s, clock, timeZone), toDate(clock), GRADE[rating]);
   const state = FROM_FSRS_STATE[card.state];
   const inSteps = state === "learning" || state === "relearning";
   return {
@@ -102,30 +150,27 @@ function fromFsrsCard(card: Card, reviewedAt: number, reviewCount: number): Dire
     step: inSteps ? card.learning_steps : null,
     stability: card.stability,
     difficulty: card.difficulty,
-    last_review_at: reviewedAt,
-    due_at: card.due.getTime() / 1000,
+    last_review_at: now,
+    due_at: now + (card.due.getTime() / 1000 - clock),
     is_due: false,
-    review_count: reviewCount,
+    review_count: s.review_count + 1,
+    first_review_at: s.state === "new" ? now : (s.first_review_at ?? null),
   };
 }
 
-/** State after reviewing `s` with `rating` at `now` (epoch seconds). */
-export function nextState(s: DirectionState, rating: ReviewRating, now: number): DirectionState {
-  const { card } = scheduler.next(toFsrsCard(s, now), toDate(now), GRADE[rating]);
-  return fromFsrsCard(card, now, s.review_count + 1);
-}
-
 /** Seconds until the card would be due again, for each possible rating. */
-export function previewIntervals(s: DirectionState, now: number): Record<ReviewRating, number> {
+export function previewIntervals(s: DirectionState, now: number, timeZone?: string): Record<ReviewRating, number> {
   const out = {} as Record<ReviewRating, number>;
   for (const rating of RATINGS) {
-    out[rating] = Math.round((nextState(s, rating, now).due_at ?? now) - now);
+    out[rating] = Math.round((nextState(s, rating, now, timeZone).due_at ?? now) - now);
   }
   return out;
 }
 
-export function isDue(s: DirectionState, now: number): boolean {
-  return s.due_at === null || now >= s.due_at;
+export function isDue(s: DirectionState, now: number, timeZone?: string): boolean {
+  if (s.due_at === null) return true;
+  if (s.state === "review") return reviewDay(s.due_at, timeZone) <= reviewDay(now, timeZone);
+  return now >= s.due_at;
 }
 
 const HOUR = 3600;

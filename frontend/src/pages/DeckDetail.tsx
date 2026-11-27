@@ -4,14 +4,18 @@ import { Layout } from "../components/Layout";
 import { ApiError, api } from "../lib/api";
 import { db, type LocalCard, type LocalDeck } from "../lib/db";
 import { useDirection } from "../lib/direction";
-import { STATE_LABELS, type SrsState, formatInterval } from "../lib/srs";
+import { resetDeck } from "../lib/review";
+import { type DirectionState, STATE_LABELS, type SrsState, formatInterval, isDue, reviewDay } from "../lib/srs";
 
 const FILTERS: SrsState[] = ["new", "learning", "review", "relearning"];
 
-function nextReviewLabel(dueAt: number | null): string {
-  if (dueAt === null) return "à apprendre";
-  const delta = dueAt - Date.now() / 1000;
-  return delta <= 0 ? "à réviser" : `dans ${formatInterval(delta)}`;
+function nextReviewLabel(state: DirectionState): string {
+  const now = Date.now() / 1000;
+  if (state.due_at === null) return "à apprendre";
+  if (isDue(state, now)) return "à réviser";
+  if (state.state !== "review") return `dans ${formatInterval(state.due_at - now)}`;
+  const days = reviewDay(state.due_at) - reviewDay(now);
+  return days === 1 ? "demain" : `dans ${formatInterval(days * 86400)}`;
 }
 
 export default function DeckDetail() {
@@ -35,6 +39,24 @@ export default function DeckDetail() {
   }, [id]);
 
   const filtered = stateFilter === null ? cards : cards.filter((c) => c[direction].state === stateFilter);
+
+  async function restartDeck() {
+    if (
+      !deck ||
+      !confirm(
+        `Remettre à zéro le deck "${deck.name}" ? Toutes ses cartes redeviennent nouvelles (dans les deux sens) ` +
+          "et reviennent au rythme de la limite quotidienne. L'historique est conservé.",
+      )
+    )
+      return;
+    try {
+      await resetDeck(id);
+    } catch {
+      alert("Remise à zéro impossible (hors ligne ?)");
+      return;
+    }
+    await load();
+  }
 
   async function removeDeck() {
     if (!deck || !confirm(`Supprimer le deck "${deck.name}" et toutes ses cartes ?`)) return;
@@ -64,6 +86,9 @@ export default function DeckDetail() {
           <button className="btn" onClick={() => navigate(`/review/${id}`)}>
             Réviser ce deck
           </button>
+          <button className="btn secondary" onClick={restartDeck}>
+            Remettre à zéro
+          </button>
           <button className="btn fail" onClick={removeDeck}>
             Supprimer le deck
           </button>
@@ -88,7 +113,7 @@ export default function DeckDetail() {
           <div className="row">
             <span>{card.recto_text || "(sans texte)"}</span>
             <span className="muted">
-              {STATE_LABELS[card[direction].state]} · {nextReviewLabel(card[direction].due_at)}
+              {STATE_LABELS[card[direction].state]} · {nextReviewLabel(card[direction])}
             </span>
           </div>
         </div>

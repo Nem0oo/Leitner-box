@@ -78,6 +78,7 @@ export interface SettingsDTO {
   reminder_enabled: boolean;
   reminder_timezone: string;
   direction: Direction;
+  new_cards_per_day: number;
   vapid_public_key: string;
 }
 
@@ -95,6 +96,7 @@ export const api = {
   updateDeck: (id: number, payload: { name?: string; description?: string }) =>
     request<DeckDTO>(`/api/decks/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteDeck: (id: number) => request<void>(`/api/decks/${id}`, { method: "DELETE" }),
+  resetDeck: (id: number) => request<void>(`/api/decks/${id}/reset`, { method: "POST" }),
 
   listCards: (params: { deck_id?: number; direction: Direction; state?: DirectionState["state"] }) => {
     const qs = new URLSearchParams();
@@ -145,7 +147,15 @@ export const api = {
   mediaUrl: (hash: string) => `/api/media/${hash}`,
 
   getSettings: () => request<SettingsDTO>("/api/settings"),
-  updateSettings: (payload: Partial<{ reminder_time: string; reminder_enabled: boolean; reminder_timezone: string; direction: Direction }>) =>
+  updateSettings: (
+    payload: Partial<{
+      reminder_time: string;
+      reminder_enabled: boolean;
+      reminder_timezone: string;
+      direction: Direction;
+      new_cards_per_day: number;
+    }>,
+  ) =>
     request<SettingsDTO>("/api/settings", { method: "PUT", body: JSON.stringify(payload) }),
 
   pushSubscribe: (subscription: PushSubscriptionJSON) =>
